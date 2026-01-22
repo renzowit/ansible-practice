@@ -1,0 +1,6 @@
+**.terraform/**
+**.ansible-lint/**
+.terraform.lock.hcl
+**.ansible/**
+terraform.tfstate
+terraform.tfstate.backup

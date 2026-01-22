@@ -1,0 +1,11 @@
+# .ansible-lint configuration
+# Use 'skip_list' to completely silence rules
+skip_list:
+  - yaml[document-start]    # Stop complaining about missing '---'
+  - yaml[line-length]       # Allow long lines
+  - name[play]              # Don't require a 'name:' for every play
+  - jinja[spacing]          # Be less strict about {{ item }} spacing
+
+# Use 'warn_list' if you want to see the error but not fail the lint
+warn_list:
+  - fqcn[action-core]       # Just warn if I don't use ansible.builtin.command
