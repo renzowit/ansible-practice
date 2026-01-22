@@ -1,0 +1,25 @@
+- name: Setup nginx on node
+  hosts: all
+  become: true
+  tasks:
+    - name: Install nginx package
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: yes
+
+    - name: Allow SSH to prevent lockout
+      community.general.ufw:
+        rule: allow
+        name: 'OpenSSH'
+
+    - name: Allow HTTP traffic for Nginx
+      community.general.ufw:
+        rule: allow
+        name: 'Nginx HTTP'
+
+    - name: Ensure UFW is enabled
+      community.general.ufw:
+        state: enabled
+
+    
