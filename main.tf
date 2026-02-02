@@ -12,9 +12,10 @@ provider "libvirt" {
 }
 
 resource "libvirt_volume" "os_image" {
-  name   = "ubuntu-base.qcow2"
+  name   = "debian-13-base.qcow2"
   pool   = "default"
-  source = "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+  # Standard Debian 13 Generic Cloud Image
+  source = "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2"
   format = "qcow2"
 }
 

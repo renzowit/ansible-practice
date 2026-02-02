@@ -1,25 +1,96 @@
-- name: Setup nginx on node
+- name: Setup and Harden Nginx Node
   hosts: all
   become: true
-  tasks:
-    - name: Install nginx package
-      ansible.builtin.apt:
+
+  vars:
+    required_packages:
+      - nginx
+      - apparmor-profiles
+      - apparmor-utils
+      - fail2ban
+      - unattended-upgrades
+    ssh_hardening_rules:
+      - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+      - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin prohibit-password' }
+      - { regexp: '^#?MaxAuthTries', line: 'MaxAuthTries 3' }
+    sysctl_settings:
+      net.ipv4.conf.all.rp_filter: '1'
+      net.ipv4.tcp_syncookies: '1'
+      net.ipv4.conf.all.accept_redirects: '0'
+
+  handlers:
+    - name: Restart SSH
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+
+    - name: Restart Nginx
+      ansible.builtin.service:
         name: nginx
-        state: present
+        state: restarted
+
+  tasks:
+    - name: Install security and web packages
+      ansible.builtin.apt:
+        pkg: "{{ required_packages }}"
         update_cache: yes
+        state: present
 
-    - name: Allow SSH to prevent lockout
+    - name: Harden SSH configuration
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      loop: "{{ ssh_hardening_rules }}"
+      notify: Restart SSH
+
+    - name: Configure firewall (UFW)
       community.general.ufw:
         rule: allow
-        name: 'OpenSSH'
-
-    - name: Allow HTTP traffic for Nginx
-      community.general.ufw:
-        rule: allow
-        name: 'Nginx HTTP'
-
-    - name: Ensure UFW is enabled
+        name: "{{ item }}"
+      loop:
+        - 'OpenSSH'
+        - 'Nginx HTTP'
+    
+    - name: Enable UFW
       community.general.ufw:
         state: enabled
 
-    
+    - name: Apply kernel hardening (sysctl)
+      ansible.posix.sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop: "{{ sysctl_settings | dict2items }}"
+
+    - name: Manage AppArmor status
+      block:
+        - name: Ensure AppArmor is enabled
+          ansible.builtin.service:
+            name: apparmor
+            state: started
+            enabled: yes
+
+        - name: Set all profiles to enforce
+          ansible.builtin.command: aa-enforce /etc/apparmor.d/*
+          register: aa_enforce_result
+          changed_when: "'Setting' in aa_enforce_result.stdout"
+          when: "ansible_os_family == 'Debian'"
+
+    - name: Configure automatic updates and Fail2Ban
+      block:
+        - name: Enable auto-upgrades
+          ansible.builtin.copy:
+            content: |
+              APT::Periodic::Update-Package-Lists "1";
+              APT::Periodic::Unattended-Upgrade "1";
+            dest: /etc/apt/apt.conf.d/20auto-upgrades
+            mode: '0644'
+
+        - name: Ensure Fail2Ban is active
+          ansible.builtin.service:
+            name: fail2ban
+            state: started
+            enabled: yes
